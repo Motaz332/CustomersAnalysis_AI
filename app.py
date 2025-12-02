@@ -53,7 +53,7 @@ st.sidebar.write(
 
 # Load Data (with error handling)
 @st.cache_data
-def load_data(path=r"C:\Users\HP 650 G3 I7\RouteFinal\Online Retail.xlsx"):
+def load_data(path=r"Online Retail.xlsx"):
     try:
         df = pd.read_excel(path)
     except FileNotFoundError:
