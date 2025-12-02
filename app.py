@@ -52,7 +52,7 @@ st.sidebar.write(
 
 
 # Load Data (with error handling)
-@st.cache_data
+@st.cache_resource
 def load_data(path=r"Online Retail.xlsx"):
     try:
         df = pd.read_excel(path)
