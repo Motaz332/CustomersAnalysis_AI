@@ -2,3 +2,4 @@ tensorflow
 matplotlib
 streamlit
 seaborn
+openpyxl
