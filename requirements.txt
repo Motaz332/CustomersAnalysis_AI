@@ -1,5 +1,4 @@
 tensorflow
 matplotlib
 streamlit
-keras
 seaborn
