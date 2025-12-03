@@ -55,19 +55,6 @@ if model_prediction:
     st.session_state.mode = 'model'
     st.rerun()
 
-# Sidebar - Instructions & Notes
-if st.session_state.mode == 'rfm':
-    st.sidebar.header("Instructions")
-    st.sidebar.write(
-        """
-        • Upload the 'Online Retail.xlsx' file to the app folder (or rename/upload via Streamlit file uploader).
-        • Use the filters to narrow customers; download results as CSV/Excel.
-        • Enter a numeric CustomerID in the lookup box to view customer-level metrics.
-        """
-    )
-# Sidebar - Model Prediction
-else:
-    pass
 
 
 # Load Data (with error handling)
