@@ -78,7 +78,7 @@ def load_data(path=r"Online Retail.xlsx"):
     except FileNotFoundError:
         return None
     df = df[(df['UnitPrice'] >= 0) & (df['Quantity'] >= 0)] 
-    df = df[df['InvoiceNo'].str.starstwith('C')]
+    df = df[df['InvoiceNo'].str.startswith('C') == False]
     df["InvoiceDate"] = pd.to_datetime(df["InvoiceDate"])
     df["TotalPrice"] = df["Quantity"] * df["UnitPrice"]
     # drop customers with missing ID
@@ -96,18 +96,6 @@ if df is None:
 
 # RFM Calculation
 
-snapshot_date = df["InvoiceDate"].max() + pd.Timedelta(days=1)
-
-rfm = df.groupby("CustomerID").agg({
-    "InvoiceDate": lambda x: (snapshot_date - x.max()).days,
-    "InvoiceNo": "count",
-    "TotalPrice": "sum"
-}).reset_index()
-
-rfm.columns = ["CustomerID", "Recency", "Frequency", "Monetary"]
-rfm["AvgOrderValue"] = rfm["Monetary"] / rfm["Frequency"]
-
-# RFM Scoring: robust fallback when qcut fails (e.g., many identical values)
 def safe_qcut(series, q=5, labels=None):
     try:
         return pd.qcut(series, q, labels=labels)
@@ -116,12 +104,6 @@ def safe_qcut(series, q=5, labels=None):
         ranks = series.rank(method="first")
         bins = pd.cut(ranks, q, labels=labels)
         return bins
-
-rfm["R_score"] = safe_qcut(rfm["Recency"], 5, labels=[5,4,3,2,1]).astype(int)
-rfm["F_score"] = safe_qcut(rfm["Frequency"], 5, labels=[1,2,3,4,5]).astype(int)
-rfm["M_score"] = safe_qcut(rfm["Monetary"], 5, labels=[1,2,3,4,5]).astype(int)
-rfm["RFM_Score"] = rfm[["R_score","F_score","M_score"]].sum(axis=1)
-
 def segment(row):
     if row["RFM_Score"] >= 13:
         return "Champions"
@@ -131,8 +113,32 @@ def segment(row):
         return "Potential"
     else:
         return "At Risk"
+    
+@st.cache_resource
+def create_rfm(df):
+    snapshot_date = df["InvoiceDate"].max() + pd.Timedelta(days=1)
+    rfm = df.groupby("CustomerID").agg({
+        "InvoiceDate": lambda x: (snapshot_date - x.max()).days,
+        "InvoiceNo": "count",
+        "TotalPrice": "sum"
+    }).reset_index()
 
-rfm["Segment"] = rfm.apply(segment, axis=1)
+    rfm.columns = ["CustomerID", "Recency", "Frequency", "Monetary"]
+    rfm["AvgOrderValue"] = rfm["Monetary"] / rfm["Frequency"]
+
+    # RFM Scoring: robust fallback when qcut fails (e.g., many identical values)
+
+
+    rfm["R_score"] = safe_qcut(rfm["Recency"], 5, labels=[5,4,3,2,1]).astype(int)
+    rfm["F_score"] = safe_qcut(rfm["Frequency"], 5, labels=[1,2,3,4,5]).astype(int)
+    rfm["M_score"] = safe_qcut(rfm["Monetary"], 5, labels=[1,2,3,4,5]).astype(int)
+    rfm["RFM_Score"] = rfm[["R_score","F_score","M_score"]].sum(axis=1)
+
+
+
+    rfm["Segment"] = rfm.apply(segment, axis=1)
+    return rfm
+rfm = create_rfm(df)
 
 
 # KPI Cards
@@ -205,155 +211,161 @@ if st.session_state.mode == 'rfm':
     frequency_min, frequency_max = int(rfm["Frequency"].min()), int(rfm["Frequency"].max())
     monetary_min, monetary_max = float(rfm["Monetary"].min()), float(rfm["Monetary"].max())
 
+    recency_filter = st.sidebar.slider("Recency (days)", recency_min, recency_max, (recency_min, recency_max))
+    frequency_filter = st.sidebar.slider("Frequency", frequency_min, frequency_max, (frequency_min, frequency_max))
+    monetary_filter = st.sidebar.slider("Monetary", float(np.floor(monetary_min)), float(np.ceil(monetary_max)), (float(np.floor(monetary_min)), float(np.ceil(monetary_max))))
 
-recency_filter = st.sidebar.slider("Recency (days)", recency_min, recency_max, (recency_min, recency_max))
-frequency_filter = st.sidebar.slider("Frequency", frequency_min, frequency_max, (frequency_min, frequency_max))
-monetary_filter = st.sidebar.slider("Monetary", float(np.floor(monetary_min)), float(np.ceil(monetary_max)), (float(np.floor(monetary_min)), float(np.ceil(monetary_max))))
+    filtered_rfm = rfm[
+        (rfm["Recency"].between(*recency_filter)) &
+        (rfm["Frequency"].between(*frequency_filter)) &
+        (rfm["Monetary"].between(*monetary_filter))
+    ]
 
-filtered_rfm = rfm[
-    (rfm["Recency"].between(*recency_filter)) &
-    (rfm["Frequency"].between(*frequency_filter)) &
-    (rfm["Monetary"].between(*monetary_filter))
-]
-
-st.subheader("📌 Filtered Customers")
-st.dataframe(filtered_rfm.sort_values(by="Monetary", ascending=False).reset_index(drop=True).head(250))
-
-
-# Campaign ROI Simulator
-
-st.subheader("💰 Campaign ROI Simulator")
-with st.expander("Open simulator"):
-    budget = st.number_input("Enter campaign budget ($):", min_value=0.0, value=1000.0, step=100.0, format="%.2f")
-    roi_percent = st.slider("Expected ROI per customer (%)", 0, 500, 50)
-    target_segment = st.selectbox("Target segment", sorted(rfm["Segment"].unique()))
-    num_customers = int(rfm[rfm["Segment"] == target_segment].shape[0])
-    expected_roi = num_customers * (roi_percent/100.0) * budget
-    st.write(f"Target Segment: *{target_segment}* — Customers: *{num_customers:,}*")
-    st.metric("Expected ROI (total)", f"${expected_roi:,.2f}")
+    st.subheader("📌 Filtered Customers")
+    st.dataframe(filtered_rfm.sort_values(by="Monetary", ascending=False).reset_index(drop=True).head(250))
 
 
-# Export Targeted Customers (always-available download buttons)
+    # Campaign ROI Simulator
 
-st.subheader("📤 Export Targeted Customers")
-# Prepare CSV and Excel in memory
-csv_bytes = filtered_rfm.to_csv(index=False).encode("utf-8")
-excel_buffer = io.BytesIO()
-with pd.ExcelWriter(excel_buffer) as writer:
-    filtered_rfm.to_excel(writer, index=False, sheet_name="Filtered_Customers")
-excel_bytes = excel_buffer.getvalue()
-
-dl_col1, dl_col2 = st.columns(2)
-dl_col1.download_button("Download CSV", data=csv_bytes, file_name="filtered_customers.csv", mime="text/csv")
-dl_col2.download_button("Download Excel", data=excel_bytes, file_name="filtered_customers.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.subheader("💰 Campaign ROI Simulator")
+    with st.expander("Open simulator"):
+        budget = st.number_input("Enter campaign budget ($):", min_value=0.0, value=1000.0, step=100.0, format="%.2f")
+        roi_percent = st.slider("Expected ROI per customer (%)", 0, 500, 50)
+        target_segment = st.selectbox("Target segment", sorted(rfm["Segment"].unique()))
+        num_customers = int(rfm[rfm["Segment"] == target_segment].shape[0])
+        expected_roi = num_customers * (roi_percent/100.0) * budget
+        st.write(f"Target Segment: *{target_segment}* — Customers: *{num_customers:,}*")
+        st.metric("Expected ROI (total)", f"${expected_roi:,.2f}")
 
 
-# Quick Trends
+    # Export Targeted Customers (always-available download buttons)
+        st.subheader("📤 Export Targeted Customers")
+    # Prepare CSV and Excel in memory
+        csv_bytes = filtered_rfm.to_csv(index=False).encode("utf-8")
+    excel_buffer = io.BytesIO()
+    with pd.ExcelWriter(excel_buffer) as writer:
+        filtered_rfm.to_excel(writer, index=False, sheet_name="Filtered_Customers")
+    excel_bytes = excel_buffer.getvalue()
 
-st.subheader("📈 Customer Behavior Trends (filtered)")
-if filtered_rfm.shape[0] > 0:
-    st.line_chart(filtered_rfm.set_index("CustomerID")[["Recency","Frequency","Monetary"]].sort_index())
-else:
-    st.info("No customers in the selected filter range to plot.")
+    dl_col1, dl_col2 = st.columns(2)
+    dl_col1.download_button("Download CSV", data=csv_bytes, file_name="filtered_customers.csv", mime="text/csv")
+    dl_col2.download_button("Download Excel", data=excel_bytes, file_name="filtered_customers.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+    # Quick Trends
+
+    st.subheader("📈 Customer Behavior Trends (filtered)")
+    if st.session_state.mode == 'rfm':
+        if filtered_rfm.shape[0] > 0:
+            st.line_chart(filtered_rfm.set_index("CustomerID")[["Recency","Frequency","Monetary"]].sort_index())
+        else:
+            st.info("No customers in the selected filter range to plot.")
 
 
 
 
 #__________________________________________________________________
-
-#DNN error percentage
-#train-> 4.221045026115981
-#test-> 4.226760458354771
-
-# encoder error percentage
-#train-> 9.619552944516201
-#test-> 9.594223170402955
-
-
-dnn_train_error = 4.221045026115981
-dnn_test_error = 4.226760458354771
-encoder_train_error = 9.619552944516201
-encoder_test_error = 9.594223170402955
-
 if st.session_state.mode == 'model':
+
+    #DNN error percentage
+    #train-> 4.221045026115981
+    #test-> 4.226760458354771
+
+    # encoder error percentage
+    #train-> 9.619552944516201
+    #test-> 9.594223170402955
+
+
+    dnn_train_error = 4.221045026115981
+    dnn_test_error = 4.226760458354771
+    encoder_train_error = 9.619552944516201
+    encoder_test_error = 9.594223170402955
+
     st.subheader("🤖 CLV Prediction for Customer")
 
     features = ['Quantity','UnitPrice','total_price','Frequency', 'Monetary', 'Recency','Country','ProductCategory','ProductDiversity']
 
     clv_input = []
-    countrys = ['InvoiceNo', 'StockCode', 'Description', 'Quantity', 'InvoiceDate',
-       'UnitPrice', 'CustomerID', 'Country', 'total_price', 'Recency',
-       'Frequency', 'Monetary', 'AverageOrderValue', 'FirstPurchase',
-       'LastPurchase', 'CustomerAgeDays', 'CustomerAgeMonth',
-       'FrequencyPerMonth', 'RecencyMonth', 'CLV', 'ProductDiversity',
-       'ProductCategory']
+    countrys = ['United Kingdom', 'France', 'Australia', 'Netherlands', 'Germany',
+       'Norway', 'EIRE', 'Switzerland', 'Spain', 'Poland', 'Portugal',
+       'Italy', 'Belgium', 'Lithuania', 'Japan', 'Iceland',
+       'Channel Islands', 'Denmark', 'Cyprus', 'Sweden', 'Finland',
+       'Austria', 'Bahrain', 'Israel', 'Greece', 'Hong Kong', 'Singapore',
+       'Lebanon', 'United Arab Emirates', 'Saudi Arabia',
+       'Czech Republic', 'Canada', 'Unspecified', 'Brazil', 'USA',
+       'European Community', 'Malta', 'RSA']
     countrys_enc = [36., 13.,  0., 24., 14., 25., 10., 33., 31., 26., 27., 19.,  3.,
        22., 20., 17.,  6.,  9.,  7., 32., 12.,  1.,  2., 18., 15., 16.,
        30., 21., 35., 29.,  8.,  5., 37.,  4., 34., 11., 23., 28.]
+    products = ['Home', 'Other', 'Fashion', 'Kitchen', 'Stationery', 'Accessories']
+    products_enc = [2, 4, 1, 3, 5, 0]
     for f in features:
         if f == 'Country':
-            val =  st.selectbox('Enter Country',options=countrys)
-            val = countrys_enc(countrys.indexof(val))
-        else : val = st.number_input(f"Enter {f}", min_value=0.0, value=1.0)
+            val =  st.sidebar.selectbox('Enter Country',options=countrys)
+            val = countrys_enc[countrys.index(val)]
+        elif f == 'ProductCategory':
+            val =  st.sidebar.selectbox('Enter Country',options=products)
+            val = products_enc[products.index(val)]
+        else : val = st.sidebar.number_input(f"Enter {f}", min_value=0.0, value=1.0)
         clv_input.append(val)
 
-input_array = np.array(clv_input).reshape(1,-1)
+    input_array = np.array(clv_input).reshape(1,-1)
 
-# normalize input as training preprocessing
-input_array_log = np.log1p(input_array)  # same as training
+    # normalize input as training preprocessing
+    input_array_log = np.log1p(input_array)  # same as training
 
-# Predict CLV using both models
-dnn_pred = dnn_model.predict(input_array_log)[0][0]
-encoder_pred = encoder_model.predict(input_array_log)[0][0]
+    # Predict CLV using both models
+    dnn_pred = dnn_model.predict(input_array_log)[0][0]
+    encoder_pred = encoder_model.predict(input_array_log)[0][0]
 
-st.write(f"**DNN Model CLV Prediction:** {dnn_pred:.2f}")
-st.write(f"**Encoder Model CLV Prediction:** {encoder_pred:.2f}")
+    st.write(f"**DNN Model CLV Prediction:** {dnn_pred:.2f}")
+    st.write(f"**Encoder Model CLV Prediction:** {encoder_pred:.2f}")
 
-# Confidence Score Calculation
-def confidence_score(pred, model_std=0.35):
-    score = math.exp(-model_std * abs(pred))
-    return round(score*100, 2)
+    # Confidence Score Calculation
+    def confidence_score(pred, model_std=0.35):
+        score = math.exp(-model_std * abs(pred))
+        return round(score*100, 2)
 
-st.write(f"**DNN Confidence Score:** {confidence_score(dnn_pred)}%")
-st.write(f"**Encoder Confidence Score:** {confidence_score(encoder_pred)}%")
+    st.write(f"**DNN Confidence Score:** {confidence_score(dnn_pred)}%")
+    st.write(f"**Encoder Confidence Score:** {confidence_score(encoder_pred)}%")
 
-#CLV Prediction & Confidence Cards 
-st.subheader("📊 CLV Prediction & Confidence")
+    #CLV Prediction & Confidence Cards 
+    st.subheader("📊 CLV Prediction & Confidence")
 
-col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
-with col1:
-    st.write("**DNN Model**")
-    st.write(f"Prediction: {dnn_pred:.2f}")
-    st.write(f"Confidence: {confidence_score(dnn_pred)}%")
-    st.metric("Training Error (%)", f"{dnn_train_error}")
-    st.metric("Testing Error (%)", f"{dnn_test_error}")
+    with col1:
+        st.write("**DNN Model**")
+        st.write(f"Prediction: {dnn_pred:.2f}")
+        st.write(f"Confidence: {confidence_score(dnn_pred)}%")
+        st.metric("Training Error (%)", f"{dnn_train_error}")
+        st.metric("Testing Error (%)", f"{dnn_test_error}")
 
-with col2:
-    st.write("**Encoder Model**")
-    st.write(f"Prediction: {encoder_pred:.2f}")
-    st.write(f"Confidence: {confidence_score(encoder_pred)}%")
-    st.metric("Training Error (%)", f"{encoder_train_error}")
-    st.metric("Testing Error (%)", f"{encoder_test_error}")
+    with col2:
+        st.write("**Encoder Model**")
+        st.write(f"Prediction: {encoder_pred:.2f}")
+        st.write(f"Confidence: {confidence_score(encoder_pred)}%")
+        st.metric("Training Error (%)", f"{encoder_train_error}")
+        st.metric("Testing Error (%)", f"{encoder_test_error}")
 
-# Model Error Comparison Chart
-st.subheader("📊 Model Error Comparison")
+    # Model Error Comparison Chart
+    st.subheader("📊 Model Error Comparison")
 
 
-df_errors = pd.DataFrame({
-    'Model': ['DNN','DNN','Encoder','Encoder'],
-    'Type': ['Training','Testing','Training','Testing'],
-    'Error': [dnn_train_error, dnn_test_error, encoder_train_error, encoder_test_error]
-})
+    df_errors = pd.DataFrame({
+        'Model': ['DNN','DNN','Encoder','Encoder'],
+        'Type': ['Training','Testing','Training','Testing'],
+        'Error': [dnn_train_error, dnn_test_error, encoder_train_error, encoder_test_error]
+    })
 
-chart = alt.Chart(df_errors).mark_bar().encode(
-    x='Model:N',
-    y='Error:Q',
-    color='Type:N',
-    tooltip=['Model','Type','Error']
-).properties(width=600)
+    chart = alt.Chart(df_errors).mark_bar().encode(
+        x='Model:N',
+        y='Error:Q',
+        color='Type:N',
+        tooltip=['Model','Type','Error']
+    ).properties(width=600)
 
-st.altair_chart(chart)
+    st.altair_chart(chart)
 
 
 #________________________________________________________________________________
