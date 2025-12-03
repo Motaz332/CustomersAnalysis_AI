@@ -34,8 +34,7 @@ dnn_model,encoder_model = load_models()
 # Page Config
 
 
-st.title("📊 Customer Analytics Dashboard")
-st.markdown("A professional RFM-based customer analytics dashboard — explore segments, run simple ROI simulations, and export targets.")
+
 
 st.sidebar.title("Chose Activite")
 c1,c2 = st.sidebar.columns(2)
@@ -44,13 +43,12 @@ if "mode" not in st.session_state:
     st.session_state.mode = 'rfm'
 
 with c1:
-    rfm_filter = st.button("Filter RMF")
+    rfm_analysis = st.button("Analysis")
 with c2:
     model_prediction = st.button("Model Performance")
-                                
 
-if rfm_filter:
-    st.session_state.mode = 'rfm'
+if rfm_analysis:
+    st.session_state.mode = 'analysis'
     st.rerun()
 if model_prediction:
     st.session_state.mode = 'model'
@@ -104,6 +102,9 @@ def segment(row):
     
 @st.cache_data
 def create_rfm(df):
+    st.title("📊 Customer Analytics Dashboard")
+    st.markdown("A professional RFM-based customer analytics dashboard — explore segments, run simple ROI simulations, and export targets.")
+    st.markdown("_"*40)
     snapshot_date = df["InvoiceDate"].max() + pd.Timedelta(days=1)
     rfm = df.groupby("CustomerID").agg({
         "InvoiceDate": lambda x: (snapshot_date - x.max()).days,
@@ -127,73 +128,72 @@ def create_rfm(df):
     rfm["Segment"] = rfm.apply(segment, axis=1)
     return rfm
 rfm = create_rfm(df)
+if st.session_state.mode == 'analysis':
+    # KPI Cards
+
+    total_customers = rfm["CustomerID"].nunique()
+    total_revenue = rfm["Monetary"].sum()
+    avg_aov = rfm["AvgOrderValue"].mean()
+    avg_recency = rfm["Recency"].mean()
+
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Customers", f"{total_customers:,}")
+    k2.metric("Total Revenue", f"${total_revenue:,.2f}")
+    k3.metric("Avg Order Value", f"${avg_aov:,.2f}")
+    k4.metric("Avg Recency (days)", f"{avg_recency:.1f}")
 
 
-# KPI Cards
+    # Customer Lookup (numeric safe)
 
-total_customers = rfm["CustomerID"].nunique()
-total_revenue = rfm["Monetary"].sum()
-avg_aov = rfm["AvgOrderValue"].mean()
-avg_recency = rfm["Recency"].mean()
-
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("Customers", f"{total_customers:,}")
-k2.metric("Total Revenue", f"${total_revenue:,.2f}")
-k3.metric("Avg Order Value", f"${avg_aov:,.2f}")
-k4.metric("Avg Recency (days)", f"{avg_recency:.1f}")
-
-
-# Customer Lookup (numeric safe)
-
-st.subheader("🔎 Customer Lookup")
-cust_input = st.number_input("Enter CustomerID:", min_value=0, step=1, format="%d")
-if cust_input:
-    cust_id = int(cust_input)
-    if cust_id in rfm["CustomerID"].values:
-        cust_data = rfm.loc[rfm["CustomerID"] == cust_id].iloc[0]
-        st.write(f"*CustomerID:* {int(cust_data['CustomerID'])}")
-        st.write(f"*Recency (days):* {int(cust_data['Recency'])}")
-        st.write(f"*Frequency:* {int(cust_data['Frequency'])}")
-        st.write(f"*Monetary (Total Spend):* ${cust_data['Monetary']:.2f}")
-        st.write(f"*Average Order Value:* ${cust_data['AvgOrderValue']:.2f}")
-        st.write(f"*RFM Score:* {cust_data['RFM_Score']}")
-        st.write(f"*Segment:* {cust_data['Segment']}")
-    else:
-        st.info("CustomerID not found in dataset.")
+    st.subheader("🔎 Customer Lookup")
+    cust_input = st.number_input("Enter CustomerID:", min_value=0, step=1, format="%d")
+    if cust_input:
+        cust_id = int(cust_input)
+        if cust_id in rfm["CustomerID"].values:
+            cust_data = rfm.loc[rfm["CustomerID"] == cust_id].iloc[0]
+            st.write(f"*CustomerID:* {int(cust_data['CustomerID'])}")
+            st.write(f"*Recency (days):* {int(cust_data['Recency'])}")
+            st.write(f"*Frequency:* {int(cust_data['Frequency'])}")
+            st.write(f"*Monetary (Total Spend):* ${cust_data['Monetary']:.2f}")
+            st.write(f"*Average Order Value:* ${cust_data['AvgOrderValue']:.2f}")
+            st.write(f"*RFM Score:* {cust_data['RFM_Score']}")
+            st.write(f"*Segment:* {cust_data['Segment']}")
+        else:
+            st.info("CustomerID not found in dataset.")
 
 
-# Segmentation Explorer & Visuals
+    # Segmentation Explorer & Visuals
 
-st.subheader("📊 Segmentation Explorer")
-segment_choice = st.multiselect("Select segment(s)", sorted(rfm["Segment"].unique()), default=sorted(rfm["Segment"].unique()))
-seg_data = rfm[rfm["Segment"].isin(segment_choice)]
+    st.subheader("📊 Segmentation Explorer")
+    segment_choice = st.multiselect("Select segment(s)", sorted(rfm["Segment"].unique()), default=sorted(rfm["Segment"].unique()))
+    seg_data = rfm[rfm["Segment"].isin(segment_choice)]
 
-st.markdown("Segment summary statistics for selected segments:")
-st.dataframe(seg_data.describe().T.style.format({
-    "mean": "{:.2f}", "std": "{:.2f}", "min": "{:.2f}", "25%": "{:.2f}", "50%": "{:.2f}", "75%": "{:.2f}", "max": "{:.2f}"
-}))
+    st.markdown("Segment summary statistics for selected segments:")
+    st.dataframe(seg_data.describe().T.style.format({
+        "mean": "{:.2f}", "std": "{:.2f}", "min": "{:.2f}", "25%": "{:.2f}", "50%": "{:.2f}", "75%": "{:.2f}", "max": "{:.2f}"
+    }))
 
-# Segment counts chart
-segment_counts = rfm.groupby("Segment").size().reset_index(name="count")
-bar = alt.Chart(segment_counts).mark_bar().encode(
-    x=alt.X("Segment:N", sort="-y"),
-    y="count:Q",
-    tooltip=["Segment","count"]
-).properties(height=300, width=600, title="Customers per Segment")
-st.altair_chart(bar, use_container_width=True)
+    # Segment counts chart
+    segment_counts = rfm.groupby("Segment").size().reset_index(name="count")
+    bar = alt.Chart(segment_counts).mark_bar().encode(
+        x=alt.X("Segment:N", sort="-y"),
+        y="count:Q",
+        tooltip=["Segment","count"]
+    ).properties(height=300, width=600, title="Customers per Segment")
+    st.altair_chart(bar, use_container_width=True)
 
-# Scatter: Frequency vs Monetary (log scale for monetary)
-scatter = alt.Chart(seg_data).mark_circle(size=60).encode(
-    x=alt.X("Frequency:Q"),
-    y=alt.Y("Monetary:Q", scale=alt.Scale(type="log")),
-    color="Segment:N",
-    tooltip=["CustomerID", "Recency", "Frequency", alt.Tooltip("Monetary", format="$,.2f")]
-).interactive().properties(title="Frequency vs Monetary (log scale)")
-st.altair_chart(scatter, use_container_width=True)
+    # Scatter: Frequency vs Monetary (log scale for monetary)
+    scatter = alt.Chart(seg_data).mark_circle(size=60).encode(
+        x=alt.X("Frequency:Q"),
+        y=alt.Y("Monetary:Q", scale=alt.Scale(type="log")),
+        color="Segment:N",
+        tooltip=["CustomerID", "Recency", "Frequency", alt.Tooltip("Monetary", format="$,.2f")]
+    ).interactive().properties(title="Frequency vs Monetary (log scale)")
+    st.altair_chart(scatter, use_container_width=True)
 
 
 # Filters for RFM (sidebar)
-if st.session_state.mode == 'rfm':
+
     st.sidebar.header("🔍 RFM Filters")
     recency_min, recency_max = int(rfm["Recency"].min()), int(rfm["Recency"].max())
     frequency_min, frequency_max = int(rfm["Frequency"].min()), int(rfm["Frequency"].max())
@@ -246,11 +246,11 @@ if st.session_state.mode == 'rfm':
     if filtered_rfm.shape[0] > 0:
         # st.line_chart(filtered_rfm.set_index("CustomerID")[["Recency","Frequency","Monetary"]].sort_index())
         st.title("Recency")
-        st.line_chart(filtered_rfm.set_index("CustomerID")[["Recency"]])
+        st.line_chart(filtered_rfm.set_index("CustomerID")[["Recency"]].sort_index())
         st.title("Frequency")
         st.line_chart(filtered_rfm.set_index("CustomerID")[["Frequency"]])
         st.title("Monetary")
-        st.line_chart(filtered_rfm.set_index("CustomerID")[["Monetary"]])
+        st.line_chart(filtered_rfm.set_index("CustomerID")[["Monetary"]].sort_index())
     else:
         st.info("No customers in the selected filter range to plot.")
 
@@ -258,7 +258,8 @@ if st.session_state.mode == 'rfm':
 
 #__________________________________________________________________
 if st.session_state.mode == 'model':
-
+    st.title("📊 Model Perofrmance Dashboard")
+    st.markdown("_"*40)
     #DNN error percentage
     #train-> 4.221045026115981
     #test-> 4.226760458354771
