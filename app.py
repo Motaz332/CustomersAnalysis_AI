@@ -281,7 +281,7 @@ if st.session_state.mode == 'model':
        'Norway', 'EIRE', 'Switzerland', 'Spain', 'Poland', 'Portugal',
        'Italy', 'Belgium', 'Lithuania', 'Japan', 'Iceland',
        'Channel Islands', 'Denmark', 'Cyprus', 'Sweden', 'Finland',
-       'Austria', 'Bahrain', 'Israel', 'Greece', 'Hong Kong', 'Singapore',
+       'Austria', 'Bahrain', 'Palestine🇵🇸', 'Greece', 'Hong Kong', 'Singapore',
        'Lebanon', 'United Arab Emirates', 'Saudi Arabia',
        'Czech Republic', 'Canada', 'Unspecified', 'Brazil', 'USA',
        'European Community', 'Malta', 'RSA']
@@ -295,13 +295,13 @@ if st.session_state.mode == 'model':
             val =  st.sidebar.selectbox('Enter Country',options=countrys)
             val = countrys_enc[countrys.index(val)]
         elif f == 'ProductCategory':
-            val =  st.sidebar.selectbox('Enter Country',options=products)
+            val =  st.sidebar.selectbox('Enter ProductCategory',options=products)
             val = products_enc[products.index(val)]
         else : val = st.sidebar.number_input(f"Enter {f}", min_value=0.0, value=1.0)
         clv_input.append(val)
 
     input_array = np.array(clv_input).reshape(1,-1)
-
+ 
     # normalize input as training preprocessing
     input_array_log = np.log1p(input_array)  # same as training
     pred = st.sidebar.button('Predict')
