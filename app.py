@@ -46,7 +46,8 @@ if "mode" not in st.session_state:
 with c1:
     rfm_filter = st.button("Filter RMF")
 with c2:
-    model_prediction = st.button("Model Predicion")
+    model_prediction = st.button("Model Performance")
+                                
 
 if rfm_filter:
     st.session_state.mode = 'rfm'
