@@ -125,6 +125,8 @@ def create_rfm(df):
 
     rfm["Segment"] = rfm.apply(segment, axis=1)
     return rfm
+st.title(df.head())
+st.head(df)
 rfm = create_rfm(df)
 
 
