@@ -326,9 +326,14 @@ if st.session_state.mode == 'model':
     def confidence_score(pred, model_std=0.35):
         score = math.exp(-model_std * abs(pred))
         return round(score*100, 2)
-
-    st.write(f"**DNN Confidence Score:** {confidence_score(dnn_pred)}%")
-    st.write(f"**Encoder Confidence Score:** {confidence_score(encoder_pred)}%")
+    if 'dnn_pred' in st.session_state:
+        confidence_dnn = f"{confidence_score(st.session_state.dnn_pred)}%"
+        confidence_encoder = f"{confidence_score(st.session_state.encoder_pred)}%"
+    else:
+        confidence_dnn = '-'
+        confidence_encoder = '-'
+    st.write(f"**DNN Confidence Score:** {confidence_dnn}")
+    st.write(f"**Encoder Confidence Score:** {confidence_dnn}")
 
     #CLV Prediction & Confidence Cards 
     st.subheader("📊 CLV Prediction & Confidence")
