@@ -306,11 +306,12 @@ if st.session_state.mode == 'model':
 
     # normalize input as training preprocessing
     input_array_log = np.log1p(input_array)  # same as training
-
+    pred = st.sidebar.button('Predict')
     # Predict CLV using both models
-    dnn_pred = dnn_model.predict(input_array_log)[0][0]
-    encoder_pred = encoder_model.predict(input_array_log)[0][0]
-
+    if pred:
+        dnn_pred = dnn_model.predict(input_array_log)[0][0]
+        encoder_pred = encoder_model.predict(input_array_log)[0][0]
+        
     st.write(f"**DNN Model CLV Prediction:** {dnn_pred:.2f}")
     st.write(f"**Encoder Model CLV Prediction:** {encoder_pred:.2f}")
 
