@@ -7,7 +7,6 @@ import altair as alt
 import tensorflow as tf
 from tensorflow.keras import metrics
 import math
-
 st.set_page_config(page_title="Customer Analytics Dashboard", layout="wide")
 #________________________________________________________________________________
 #load saved models DNN and ENCODERMODEL
@@ -38,17 +37,37 @@ dnn_model,encoder_model = load_models()
 st.title("📊 Customer Analytics Dashboard")
 st.markdown("A professional RFM-based customer analytics dashboard — explore segments, run simple ROI simulations, and export targets.")
 
+st.sidebar.title("Chose Activite")
+c1,c2 = st.sidebar.columns(2)
+
+if "mode" not in st.session_state:
+    st.session_state.mode = 'rfm'
+
+with c1:
+    rfm_filter = st.button("Filter RMF")
+with c2:
+    model_prediction = st.button("Model Predicion")
+
+if rfm_filter:
+    st.session_state.mode = 'rfm'
+    st.rerun()
+if model_prediction:
+    st.session_state.mode = 'model'
+    st.rerun()
 
 # Sidebar - Instructions & Notes
-
-st.sidebar.header("Instructions")
-st.sidebar.write(
-    """
-    • Upload the 'Online Retail.xlsx' file to the app folder (or rename/upload via Streamlit file uploader).
-    • Use the filters to narrow customers; download results as CSV/Excel.
-    • Enter a numeric CustomerID in the lookup box to view customer-level metrics.
-    """
-)
+if st.session_state.mode == 'rfm':
+    st.sidebar.header("Instructions")
+    st.sidebar.write(
+        """
+        • Upload the 'Online Retail.xlsx' file to the app folder (or rename/upload via Streamlit file uploader).
+        • Use the filters to narrow customers; download results as CSV/Excel.
+        • Enter a numeric CustomerID in the lookup box to view customer-level metrics.
+        """
+    )
+# Sidebar - Model Prediction
+else:
+    pass
 
 
 # Load Data (with error handling)
@@ -58,8 +77,9 @@ def load_data(path=r"Online Retail.xlsx"):
         df = pd.read_excel(path)
     except FileNotFoundError:
         return None
+    # df = df[(df['UnitPrice'] >= 0) and (df['Quantity'] >= 0)] 
+    # df = df[df['InvoiceNo'].str.starstwith('C')]
     df["InvoiceDate"] = pd.to_datetime(df["InvoiceDate"])
-    df = df[df['UnitPrice'] >= 0] 
     df["TotalPrice"] = df["Quantity"] * df["UnitPrice"]
     # drop customers with missing ID
     df = df.dropna(subset=["CustomerID"])
@@ -67,6 +87,7 @@ def load_data(path=r"Online Retail.xlsx"):
     return df
 
 df = load_data()
+
 
 if df is None:
     st.error("Data file 'Online Retail.xlsx' not found in the app folder. Place the file next to app.py or upload it.")
@@ -178,11 +199,12 @@ st.altair_chart(scatter, use_container_width=True)
 
 
 # Filters for RFM (sidebar)
+if st.session_state.mode == 'rfm':
+    st.sidebar.header("🔍 RFM Filters")
+    recency_min, recency_max = int(rfm["Recency"].min()), int(rfm["Recency"].max())
+    frequency_min, frequency_max = int(rfm["Frequency"].min()), int(rfm["Frequency"].max())
+    monetary_min, monetary_max = float(rfm["Monetary"].min()), float(rfm["Monetary"].max())
 
-st.sidebar.header("🔍 RFM Filters")
-recency_min, recency_max = int(rfm["Recency"].min()), int(rfm["Recency"].max())
-frequency_min, frequency_max = int(rfm["Frequency"].min()), int(rfm["Frequency"].max())
-monetary_min, monetary_max = float(rfm["Monetary"].min()), float(rfm["Monetary"].max())
 
 recency_filter = st.sidebar.slider("Recency (days)", recency_min, recency_max, (recency_min, recency_max))
 frequency_filter = st.sidebar.slider("Frequency", frequency_min, frequency_max, (frequency_min, frequency_max))
@@ -253,15 +275,27 @@ dnn_test_error = 4.226760458354771
 encoder_train_error = 9.619552944516201
 encoder_test_error = 9.594223170402955
 
+if st.session_state.mode == 'model':
+    st.subheader("🤖 CLV Prediction for Customer")
 
-st.subheader("🤖 CLV Prediction for Customer")
+    features = ['Quantity','UnitPrice','total_price','Frequency', 'Monetary', 'Recency','Country','ProductCategory','ProductDiversity']
 
-features = ['Quantity','UnitPrice','total_price','Frequency', 'Monetary', 'Recency','Country','ProductCategory','ProductDiversity']
-
-clv_input = []
-for f in features:
-    val = st.number_input(f"Enter {f}", min_value=0.0, value=1.0)
-    clv_input.append(val)
+    clv_input = []
+    countrys = ['InvoiceNo', 'StockCode', 'Description', 'Quantity', 'InvoiceDate',
+       'UnitPrice', 'CustomerID', 'Country', 'total_price', 'Recency',
+       'Frequency', 'Monetary', 'AverageOrderValue', 'FirstPurchase',
+       'LastPurchase', 'CustomerAgeDays', 'CustomerAgeMonth',
+       'FrequencyPerMonth', 'RecencyMonth', 'CLV', 'ProductDiversity',
+       'ProductCategory']
+    countrys_enc = [36., 13.,  0., 24., 14., 25., 10., 33., 31., 26., 27., 19.,  3.,
+       22., 20., 17.,  6.,  9.,  7., 32., 12.,  1.,  2., 18., 15., 16.,
+       30., 21., 35., 29.,  8.,  5., 37.,  4., 34., 11., 23., 28.]
+    for f in features:
+        if f == 'Country':
+            val =  st.selectbox('Enter Country',options=countrys)
+            val = countrys_enc(countrys.indexof(val))
+        else : val = st.number_input(f"Enter {f}", min_value=0.0, value=1.0)
+        clv_input.append(val)
 
 input_array = np.array(clv_input).reshape(1,-1)
 
