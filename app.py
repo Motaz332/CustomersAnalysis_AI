@@ -273,9 +273,7 @@ if st.session_state.mode == 'model':
     dnn_test_error = 4.226760458354771
     encoder_train_error = 9.619552944516201
     encoder_test_error = 9.594223170402955
-
-    st.subheader("🤖 CLV Prediction for Customer")
-
+    
     features = ['Quantity','UnitPrice','total_price','Frequency', 'Monetary', 'Recency','Country','ProductCategory','ProductDiversity']
 
     clv_input = []
@@ -307,48 +305,47 @@ if st.session_state.mode == 'model':
     # normalize input as training preprocessing
     input_array_log = np.log1p(input_array)  # same as training
     pred = st.sidebar.button('Predict')
+
+
     # Predict CLV using both models
-    if pred:
-        st.session_state.dnn_pred = dnn_model.predict(input_array_log)[0][0]
-        st.session_state.encoder_pred = encoder_model.predict(input_array_log)[0][0]
-        st.rerun()
-    
-    if 'dnn_pred' in st.session_state:
-        dnn_pred = f"{st.session_state.dnn_pred:.2f}"
-        encoder_pred = f"{st.session_state.encoder_pred:.2f}"
-    else:
-        dnn_pred = '-'
-        encoder_pred = '-'
-    st.write(f"**DNN Model CLV Prediction:** {dnn_pred}")
-    st.write(f"**Encoder Model CLV Prediction:** {encoder_pred}")
 
     # Confidence Score Calculation
     def confidence_score(pred, model_std=0.35):
         score = math.exp(-model_std * abs(pred))
-        return round(score*100, 2)
+        return round(score*100,2)
+                     
+    if pred:
+        st.session_state.dnn_pred = dnn_model.predict(input_array_log)[0][0]
+        st.session_state.encoder_pred = encoder_model.predict(input_array_log)[0][0]
+        pred = False
+        st.rerun()
+
+
     if 'dnn_pred' in st.session_state:
+        dnn_pred = f"{st.session_state.dnn_pred:.2f}"
+        encoder_pred = f"{st.session_state.encoder_pred:.2f}"
         confidence_dnn = f"{confidence_score(st.session_state.dnn_pred)}%"
         confidence_encoder = f"{confidence_score(st.session_state.encoder_pred)}%"
     else:
+        dnn_pred = '-'
+        encoder_pred = '-'
         confidence_dnn = '-'
         confidence_encoder = '-'
-    st.write(f"**DNN Confidence Score:** {confidence_dnn}")
-    st.write(f"**Encoder Confidence Score:** {confidence_dnn}")
 
     #CLV Prediction & Confidence Cards 
-    st.subheader("📊 CLV Prediction & Confidence")
+    st.subheader("🤖 CLV Prediction & Confidence")
 
     col1, col2 = st.columns(2)
 
     with col1:
         st.subheader("**DNN Model**")
-        st.write(f"Prediction: {dnn_pred:.2f}")
-        st.write(f"Confidence: {confidence_score(dnn_pred)}%")
+        st.write(f"Prediction: {dnn_pred:}")
+        st.write(f"Confidence: {confidence_dnn}")
 
     with col2:
         st.subheader("**Encoder Model**")
-        st.write(f"Prediction: {encoder_pred:.2f}")
-        st.write(f"Confidence: {confidence_score(encoder_pred)}%")
+        st.write(f"Prediction: {encoder_pred}")
+        st.write(f"Confidence: {confidence_encoder}")
 
     st.write("--------------------------------Modles metrics-------------------------")
     col1, col2 = st.columns(2)
