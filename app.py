@@ -77,7 +77,7 @@ def load_data(path=r"Online Retail.xlsx"):
         df = pd.read_excel(path)
     except FileNotFoundError:
         return None
-    df = df[(df['UnitPrice'] >= 0) and (df['Quantity'] >= 0)] 
+    df = df[(df['UnitPrice'] >= 0) & (df['Quantity'] >= 0)] 
     df = df[df['InvoiceNo'].str.starstwith('C')]
     df["InvoiceDate"] = pd.to_datetime(df["InvoiceDate"])
     df["TotalPrice"] = df["Quantity"] * df["UnitPrice"]
