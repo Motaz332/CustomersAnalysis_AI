@@ -17,12 +17,12 @@ st.set_page_config(page_title="Customer Analytics Dashboard", layout="wide")
 def load_models():
 
     m1 = tf.keras.models.load_model(
-        r'model_DNN.h5',
+        r'C:\Users\HP 650 G3 I7\RouteFinal\model_DNN.h5',
         compile=False,
         custom_objects={'mse': metrics.MeanSquaredError()}
     )
     m2 = tf.keras.models.load_model(
-        r"enc_model_DNN.h5",
+        r"C:\Users\HP 650 G3 I7\RouteFinal\enc_model_DNN.h5",
         compile=False,  
         custom_objects={'mse': metrics.MeanSquaredError()}
     )
@@ -71,14 +71,14 @@ else:
 
 
 # Load Data (with error handling)
-@st.cache_resource
-def load_data(path=r"Online Retail.xlsx"):
+@st.cache_data
+def load_data(path=r"C:\Users\HP 650 G3 I7\RouteFinal\Online Retail.xlsx"):
     try:
         df = pd.read_excel(path)
     except FileNotFoundError:
         return None
     df = df[(df['UnitPrice'] >= 0) & (df['Quantity'] >= 0)] 
-    df = df[df['InvoiceNo'].str.startswith('C') == False]
+    df = df[df['InvoiceNo'].astype('str').str.startswith('C') == False]
     df["InvoiceDate"] = pd.to_datetime(df["InvoiceDate"])
     df["TotalPrice"] = df["Quantity"] * df["UnitPrice"]
     # drop customers with missing ID
@@ -114,7 +114,7 @@ def segment(row):
     else:
         return "At Risk"
     
-@st.cache_resource
+@st.cache_data
 def create_rfm(df):
     snapshot_date = df["InvoiceDate"].max() + pd.Timedelta(days=1)
     rfm = df.groupby("CustomerID").agg({
