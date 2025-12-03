@@ -40,7 +40,7 @@ st.sidebar.title("Chose Activite")
 c1,c2 = st.sidebar.columns(2)
 
 if "mode" not in st.session_state:
-    st.session_state.mode = 'rfm'
+    st.session_state.mode = 'analysis'
 
 with c1:
     rfm_analysis = st.button("Analysis")
@@ -309,11 +309,12 @@ if st.session_state.mode == 'model':
     pred = st.sidebar.button('Predict')
     # Predict CLV using both models
     if pred:
-        dnn_pred = dnn_model.predict(input_array_log)[0][0]
-        encoder_pred = encoder_model.predict(input_array_log)[0][0]
-        
-    st.write(f"**DNN Model CLV Prediction:** {dnn_pred:.2f}")
-    st.write(f"**Encoder Model CLV Prediction:** {encoder_pred:.2f}")
+        st.session_state.dnn_pred = dnn_model.predict(input_array_log)[0][0]
+        st.session_state.encoder_pred = encoder_model.predict(input_array_log)[0][0]
+        pred = 0
+
+    st.write(f"**DNN Model CLV Prediction:** {dnn_pred:.2f if dnn_pred in st.session_state else '-'}")
+    st.write(f"**Encoder Model CLV Prediction:** {encoder_pred:.2f if encoder_pred in st.session_state else '-'}")
 
     # Confidence Score Calculation
     def confidence_score(pred, model_std=0.35):
