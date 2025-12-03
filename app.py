@@ -74,7 +74,7 @@ def load_data(path=r"Online Retail.xlsx"):
     return df
 
 df = load_data()
-
+st.title('hi')
 
 if df is None:
     st.error("Data file 'Online Retail.xlsx' not found in the app folder. Place the file next to app.py or upload it.")
