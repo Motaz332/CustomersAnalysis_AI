@@ -308,13 +308,15 @@ if st.session_state.mode == 'model':
     input_array_log = np.log1p(input_array)  # same as training
     pred = st.sidebar.button('Predict')
     # Predict CLV using both models
+    
     if pred:
         st.session_state.dnn_pred = dnn_model.predict(input_array_log)[0][0]
         st.session_state.encoder_pred = encoder_model.predict(input_array_log)[0][0]
-        pred = 0
-
-    st.write(f"**DNN Model CLV Prediction:** {dnn_pred:.2f if dnn_pred in st.session_state else '-'}")
-    st.write(f"**Encoder Model CLV Prediction:** {encoder_pred:.2f if encoder_pred in st.session_state else '-'}")
+        pred = False
+        st.rerun()
+    
+    st.write(f"**DNN Model CLV Prediction:** {st.session_state.dnn_pred:.2f if dnn_pred in st.session_state else '-'}")
+    st.write(f"**Encoder Model CLV Prediction:** {st.session_stete.encoder_pred:.2f if encoder_pred in st.session_state else '-'}")
 
     # Confidence Score Calculation
     def confidence_score(pred, model_std=0.35):
