@@ -17,12 +17,12 @@ st.set_page_config(page_title="Customer Analytics Dashboard", layout="wide")
 def load_models():
 
     m1 = tf.keras.models.load_model(
-        r'C:\Users\HP 650 G3 I7\RouteFinal\model_DNN.h5',
+        r'model_DNN.h5',
         compile=False,
         custom_objects={'mse': metrics.MeanSquaredError()}
     )
     m2 = tf.keras.models.load_model(
-        r"C:\Users\HP 650 G3 I7\RouteFinal\enc_model_DNN.h5",
+        r"enc_model_DNN.h5",
         compile=False,  
         custom_objects={'mse': metrics.MeanSquaredError()}
     )
@@ -59,7 +59,7 @@ if model_prediction:
 
 # Load Data (with error handling)
 @st.cache_data
-def load_data(path=r"C:\Users\HP 650 G3 I7\RouteFinal\Online Retail.xlsx"):
+def load_data(path=r"Online Retail.xlsx"):
     try:
         df = pd.read_excel(path)
     except FileNotFoundError:
