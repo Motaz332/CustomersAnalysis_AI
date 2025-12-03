@@ -55,7 +55,7 @@ if model_prediction:
     st.session_state.mode = 'model'
     st.rerun()
 
-
+st.title('hi')
 
 # Load Data (with error handling)
 @st.cache_data
